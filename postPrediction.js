@@ -35,5 +35,12 @@ async function main() {
     await client.v2.tweet(tweet);
     console.log("Prediction posted autonomously 🧠⚽");
 }
+try {
+    await client.v2.tweet(text);
+    console.log("Tweet posted");
+} catch (e) {
+    console.log("X API blocked — prediction generated:");
+    console.log(text);
+}
 
 main().catch(console.error);
