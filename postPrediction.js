@@ -1,14 +1,15 @@
+import { recordPredictionOnChain, getAccuracy, getPredictionCount } from "./blockchain.js";
 import { TwitterApi } from "twitter-api-v2";
 import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
 
-// Twitter client
-const client = new TwitterApi({
+// Twitter client (optional)
+const client = process.env.X_API_KEY ? new TwitterApi({
     appKey: process.env.X_API_KEY,
     appSecret: process.env.X_API_SECRET,
     accessToken: process.env.X_ACCESS_TOKEN,
     accessSecret: process.env.X_ACCESS_SECRET,
-});
+}) : null;
 
 // Anthropic client
 const anthropic = new Anthropic({
@@ -72,13 +73,14 @@ Oracle addendum: the crab has seen the data 🦀
 
 #ClawdKitchen #Base`;
 
-        return tweet;
+        // Return both the tweet and the data needed for blockchain
+        return { tweet, match, prediction };
 
     } catch (error) {
-        console.error("AI prediction failed:", error);
+        console.error("AI prediction failed:", error.message);
         // Fallback to basic prediction
         const confidence = Math.floor(Math.random() * 20) + 55;
-        return `⚽️ Match Intelligence Update
+        const tweet = `⚽️ Match Intelligence Update
 
 ${match.home} vs ${match.away}
 
@@ -88,21 +90,57 @@ Tactical edge + recent form advantage.
 Oracle addendum: the crab has seen the data 🦀
 
 #ClawdKitchen #Base`;
+
+        const prediction = {
+            winner: "home",
+            confidence: confidence,
+            reasoning: "Fallback prediction"
+        };
+
+        return { tweet, match, prediction };
     }
 }
 
 async function main() {
-    const tweet = await generatePrediction();
+    const { tweet, match, prediction } = await generatePrediction();
 
+    // Record prediction on blockchain FIRST
     try {
-        await client.v2.tweet(tweet);
-        console.log("AI prediction posted autonomously 🧠⚽");
-        console.log(tweet);
-    } catch (e) {
-        console.log("X API blocked — prediction generated:");
-        console.log(tweet);
-        console.error(e);
+        console.log("📝 Recording prediction on Base blockchain...");
+        const txHash = await recordPredictionOnChain(
+            match,
+            prediction.winner,
+            prediction.confidence
+        );
+        console.log("✅ Blockchain transaction:", txHash);
+
+        // Get current stats
+        const accuracy = await getAccuracy();
+        const count = await getPredictionCount();
+        console.log(`📊 Total predictions: ${count} | Accuracy: ${accuracy}%`);
+    } catch (error) {
+        console.error("❌ Blockchain recording failed:", error.message);
+        console.log("⚠️  Continuing anyway...");
     }
+
+    // Post to Twitter (optional)
+    if (client) {
+        try {
+            await client.v2.tweet(tweet);
+            console.log("🐦 AI prediction posted to Twitter!");
+        } catch (e) {
+            console.log("⚠️  Twitter posting failed (API credits needed or rate limited)");
+            console.log("   Error:", e.message);
+        }
+    } else {
+        console.log("ℹ️  Twitter disabled (no API credentials configured)");
+    }
+
+    // Always display the prediction
+    console.log("\n📱 Prediction Content:");
+    console.log("─".repeat(50));
+    console.log(tweet);
+    console.log("─".repeat(50));
 }
 
 main().catch(console.error);
